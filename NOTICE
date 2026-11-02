@@ -1,0 +1,16 @@
+@kitsy/pdf
+Copyright 2026 HEYPKV INNOVATIONS PRIVATE LIMITED
+
+This product includes software developed by HEYPKV INNOVATIONS PRIVATE LIMITED
+(https://kitsy.ai).
+
+This product depends on third-party open-source software, which is installed
+from npm as dependencies and is not modified or bundled into this package's
+own files. See THIRD_PARTY_NOTICES.md for the list and their licenses.
+
+pdf.js is Copyright Mozilla Foundation and is licensed under the Apache
+License, Version 2.0.
+
+qpdf is Copyright Jay Berkenbilt and contributors and is licensed under the
+Apache License, Version 2.0. It reaches this package as WebAssembly through
+@neslinesli93/qpdf-wasm.

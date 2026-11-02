@@ -1,0 +1,54 @@
+/*
+ * Prebuilt styles for @kitsy/pdf/react, for host apps that do not use
+ * Tailwind CSS: theme variables, the utilities the components use, and a
+ * small reset scoped to the tools' root element (.kitsy-pdf), so nothing
+ * outside the tools is affected. Dark mode follows a `dark` class on <html>
+ * or any ancestor.
+ */
+@layer theme, base, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@source "../src";
+
+@layer base {
+  :where(.kitsy-pdf, .kitsy-pdf *, .kitsy-pdf ::before, .kitsy-pdf ::after) {
+    box-sizing: border-box;
+    border: 0 solid;
+    margin: 0;
+    padding: 0;
+  }
+  :where(.kitsy-pdf) {
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  :where(.kitsy-pdf) :where(h1, h2, h3, p, ul, ol, legend) {
+    font-size: inherit;
+    font-weight: inherit;
+  }
+  :where(.kitsy-pdf) :where(ul, ol) {
+    list-style: none;
+  }
+  :where(.kitsy-pdf) :where(a) {
+    color: inherit;
+    text-decoration: inherit;
+  }
+  :where(.kitsy-pdf) :where(button, input, select, textarea) {
+    font: inherit;
+    color: inherit;
+    letter-spacing: inherit;
+    background-color: transparent;
+  }
+  :where(.kitsy-pdf) :where(button, [role="button"]) {
+    cursor: pointer;
+  }
+  :where(.kitsy-pdf) :where(img, svg, canvas, video) {
+    display: block;
+    max-width: 100%;
+  }
+  :where(.kitsy-pdf) :where([hidden]:not([hidden="until-found"])) {
+    display: none;
+  }
+}

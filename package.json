@@ -1,0 +1,164 @@
+{
+  "name": "@kitsy/pdf",
+  "version": "0.1.0",
+  "description": "Private, in-browser PDF tools: merge, split, organize, compress, watermark, fill forms, protect, sign (including PAdES digital signatures with .pfx certificates) and verify. Framework-free core plus optional React UIs.",
+  "license": "Apache-2.0",
+  "author": "HEYPKV INNOVATIONS PRIVATE LIMITED (https://kitsy.ai)",
+  "homepage": "https://github.com/kitsyai/pdf#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kitsyai/pdf.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kitsyai/pdf/issues"
+  },
+  "keywords": [
+    "pdf",
+    "merge",
+    "split",
+    "compress",
+    "watermark",
+    "pdf-forms",
+    "digital-signature",
+    "pades",
+    "dsc",
+    "pkcs12",
+    "pdf-lib",
+    "pdfjs",
+    "react",
+    "browser"
+  ],
+  "type": "module",
+  "sideEffects": [
+    "*.css"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./vite": {
+      "types": "./dist/vite.d.ts",
+      "import": "./dist/vite.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.js"
+    },
+    "./react/merge": {
+      "types": "./dist/react/merge.d.ts",
+      "import": "./dist/react/merge.js"
+    },
+    "./react/split": {
+      "types": "./dist/react/split.d.ts",
+      "import": "./dist/react/split.js"
+    },
+    "./react/images-to-pdf": {
+      "types": "./dist/react/images-to-pdf.d.ts",
+      "import": "./dist/react/images-to-pdf.js"
+    },
+    "./react/watermark": {
+      "types": "./dist/react/watermark.d.ts",
+      "import": "./dist/react/watermark.js"
+    },
+    "./react/metadata": {
+      "types": "./dist/react/metadata.d.ts",
+      "import": "./dist/react/metadata.js"
+    },
+    "./react/organize": {
+      "types": "./dist/react/organize.d.ts",
+      "import": "./dist/react/organize.js"
+    },
+    "./react/sign": {
+      "types": "./dist/react/sign.d.ts",
+      "import": "./dist/react/sign.js"
+    },
+    "./react/pdf-to-images": {
+      "types": "./dist/react/pdf-to-images.d.ts",
+      "import": "./dist/react/pdf-to-images.js"
+    },
+    "./react/compress": {
+      "types": "./dist/react/compress.d.ts",
+      "import": "./dist/react/compress.js"
+    },
+    "./react/fill-form": {
+      "types": "./dist/react/fill-form.d.ts",
+      "import": "./dist/react/fill-form.js"
+    },
+    "./react/protect": {
+      "types": "./dist/react/protect.d.ts",
+      "import": "./dist/react/protect.js"
+    },
+    "./react/certificate-sign": {
+      "types": "./dist/react/certificate-sign.d.ts",
+      "import": "./dist/react/certificate-sign.js"
+    },
+    "./react/verify-signatures": {
+      "types": "./dist/react/verify-signatures.d.ts",
+      "import": "./dist/react/verify-signatures.js"
+    },
+    "./styles.css": "./dist/styles.css",
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "LICENSE",
+    "NOTICE",
+    "THIRD_PARTY_NOTICES.md",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "packageManager": "pnpm@10.13.1",
+  "scripts": {
+    "build": "tsup && pnpm run build:css",
+    "build:css": "tailwindcss -i ./styles/styles.css -o ./dist/styles.css --minify",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest --run",
+    "check": "pnpm run typecheck && pnpm run test && pnpm run build",
+    "prepublishOnly": "pnpm run check"
+  },
+  "dependencies": {
+    "@fontsource/dancing-script": "^5.3.0",
+    "@fontsource/great-vibes": "^5.3.0",
+    "@neslinesli93/qpdf-wasm": "^0.3.0",
+    "asn1js": "^3.0.6",
+    "node-forge": "^1.4.2",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^4.10.38",
+    "pkijs": "3.4.0"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "4.2.2",
+    "@types/node": "22.15.0",
+    "@types/node-forge": "^1.3.11",
+    "@types/react": "19.2.14",
+    "react": "19.2.5",
+    "tailwindcss": "4.2.2",
+    "tsup": "8.5.0",
+    "typescript": "5.9.3",
+    "vitest": "3.2.4"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "@parcel/watcher"
+    ]
+  }
+}

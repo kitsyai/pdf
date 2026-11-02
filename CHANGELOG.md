@@ -5,7 +5,7 @@ All notable changes to this package are listed here. The format follows
 [Semantic Versioning](https://semver.org/). Before 1.0.0, minor versions may
 include breaking changes.
 
-## [0.1.0] - Unreleased
+## [0.1.0] - 2026-11-02
 
 First public release.
 

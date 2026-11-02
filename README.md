@@ -216,8 +216,11 @@ pnpm pack        # inspect exactly what would be published
 1. Update the version in `package.json` and `CHANGELOG.md`.
 2. `pnpm run check` (typecheck, tests, build). `prepublishOnly` runs it
    again.
-3. `npm publish --access public`. You must be logged in as a member of the
-   `kitsy` npm organisation, with 2FA if the organisation requires it.
+3. `npm publish`. `publishConfig.registry` in `package.json` always sends
+   it to the public npm registry (registry.npmjs.org), even if your `.npmrc`
+   maps the `@kitsy` scope to a private registry. Log in there first with
+   `npm login --registry=https://registry.npmjs.org/`, as a member of the
+   `kitsy` npm organisation (with 2FA if the organisation requires it).
 
 ## License
 

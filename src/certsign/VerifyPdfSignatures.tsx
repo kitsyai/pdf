@@ -70,6 +70,12 @@ function SignatureCard({ check, index }: { check: SignatureCheck; index: number 
           { label: "Format", value: check.subFilter || "-" },
         ]}
       />
+      {!check.coversWholeFile ? (
+        <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+          Signed on, reason, and location are read from the file's latest version, which was changed after signing, so
+          they may not be what the signer wrote.
+        </p>
+      ) : null}
       {signer?.selfSigned ? (
         <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">The certificate is self-signed, so anyone could have made it.</p>
       ) : null}

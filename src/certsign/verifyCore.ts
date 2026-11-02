@@ -60,6 +60,30 @@ function derLength(bytes: Uint8Array) {
   return 2 + count + length;
 }
 
+/** Hex digits, plus the whitespace PDF allows inside hex strings. */
+function isHexOrSpace(byte: number) {
+  return (
+    (byte >= 0x30 && byte <= 0x39) || // 0-9
+    (byte >= 0x41 && byte <= 0x46) || // A-F
+    (byte >= 0x61 && byte <= 0x66) || // a-f
+    byte === 0x20 ||
+    byte === 0x0a ||
+    byte === 0x0d ||
+    byte === 0x09 ||
+    byte === 0x0c ||
+    byte === 0x00
+  );
+}
+
+/** A CMS signingTime value: UTCTime up to 2049, GeneralizedTime from 2050. */
+export function cmsTime(value: unknown) {
+  if (value instanceof asn1js.UTCTime || value instanceof asn1js.GeneralizedTime) {
+    const date = value.toDate();
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  return null;
+}
+
 function attributeValue(signerInfo: pkijs.SignerInfo, oid: string) {
   return signerInfo.signedAttrs?.attributes.find((attribute) => attribute.type === oid)?.values[0];
 }
@@ -94,7 +118,10 @@ async function checkSignature(file: Uint8Array, name: string, dict: PDFDict): Pr
     firstLength < secondStart &&
     secondStart + secondLength <= file.length &&
     file[firstLength] === 0x3c /* < */ &&
-    file[secondStart - 1] === 0x3e; /* > */
+    file[secondStart - 1] === 0x3e /* > */ &&
+    // The unsigned gap must be exactly the /Contents hex string. Anything else
+    // in it (a signature-wrapping attack) would be unsigned content.
+    file.subarray(firstLength + 1, secondStart - 1).every(isHexOrSpace);
   check.coversWholeFile = structureOk && secondStart + secondLength === file.length;
   if (!structureOk) {
     check.intact = false;
@@ -137,7 +164,7 @@ async function checkSignature(file: Uint8Array, name: string, dict: PDFDict): Pr
   }
 
   const signingTimeAttr = attributeValue(signerInfo, OID.signingTime);
-  if (!check.signingTime && signingTimeAttr instanceof asn1js.UTCTime) check.signingTime = signingTimeAttr.toDate();
+  if (!check.signingTime) check.signingTime = cmsTime(signingTimeAttr);
   if (check.signer && check.signingTime) {
     check.certificateValidAtSigning =
       check.signingTime >= check.signer.notBefore && check.signingTime <= check.signer.notAfter;

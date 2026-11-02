@@ -1,10 +1,11 @@
+import * as asn1js from "asn1js";
 import { describe, expect, it } from "vitest";
 import { PDFDict, PDFDocument, PDFName, degrees } from "pdf-lib";
 import { testIdentity } from "../test-utils/certificates";
 import { buildCmsSignature, describeCertificate, webCryptoSigner } from "./cms";
 import { displayDate, signPdfWithCertificate } from "./padesCore";
 import { CertificatePasswordError, readPkcs12 } from "./pkcs12";
-import { parsePdfDate, verifyPdfSignatures } from "./verifyCore";
+import { cmsTime, parsePdfDate, verifyPdfSignatures } from "./verifyCore";
 
 async function samplePdf(rotation = 0) {
   const doc = await PDFDocument.create();
@@ -92,6 +93,23 @@ describe("signPdfWithCertificate + verifyPdfSignatures", () => {
     expect(later).toMatchObject({ intact: true, coversWholeFile: false });
   });
 
+  it("rejects unsigned syntax written into the /Contents padding (signature wrapping)", async () => {
+    const signed = await signPdfWithCertificate(await samplePdf(), await signer());
+    const text = new TextDecoder("latin1").decode(signed);
+    const match = /\/ByteRange\s*\[\s*0\s+(\d+)\s+(\d+)\s+(\d+)\s*\]/.exec(text);
+    expect(match).not.toBeNull();
+    const secondStart = Number(match![2]);
+    // Keep the gap's length and its < ... > ends; overwrite trailing zero padding.
+    const injected = new TextEncoder().encode("> /Reason (Approved by Finance - pay INR 9,50,000) /Location (Mumbai HQ) /X <");
+    const wrapped = signed.slice();
+    wrapped.set(injected, secondStart - 1 - injected.length);
+    expect(wrapped[secondStart - 1]).toBe(0x3e);
+
+    const [check] = await verifyPdfSignatures(wrapped);
+    expect(check.intact).toBe(false);
+    expect(check.problem).toMatch(/byte range does not match/);
+  });
+
   it("draws a visible box upright on a rotated page", async () => {
     const signed = await signPdfWithCertificate(await samplePdf(90), await signer(), {
       reason: "नमस्ते approval",
@@ -137,6 +155,14 @@ describe("buildCmsSignature", () => {
 });
 
 describe("dates", () => {
+  it("reads CMS signing times as UTCTime and as GeneralizedTime (2050 and later)", () => {
+    const early = new Date("2026-11-01T10:00:00Z");
+    const late = new Date("2051-03-04T05:06:07Z");
+    expect(cmsTime(new asn1js.UTCTime({ valueDate: early }))?.toISOString()).toBe(early.toISOString());
+    expect(cmsTime(new asn1js.GeneralizedTime({ valueDate: late }))?.toISOString()).toBe(late.toISOString());
+    expect(cmsTime(new asn1js.Integer({ value: 1 }))).toBeNull();
+  });
+
   it("parses PDF dates with offsets", () => {
     expect(parsePdfDate("D:20261101153000+05'30'")?.toISOString()).toBe("2026-11-01T10:00:00.000Z");
     expect(parsePdfDate("D:20261101100000Z")?.toISOString()).toBe("2026-11-01T10:00:00.000Z");

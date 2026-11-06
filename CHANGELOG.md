@@ -5,6 +5,16 @@ All notable changes to this package are listed here. The format follows
 [Semantic Versioning](https://semver.org/). Before 1.0.0, minor versions may
 include breaking changes.
 
+## [0.2.0] - Unreleased
+
+### Added
+
+- USB-token DSC signing through hey's `dsc` service: `findTokenCertificates`,
+  `heyTokenSigner`, `HeyDscError` and `HEY_HUB_URL`. The private key stays on
+  the token, and the user confirms each signature in a native dialog.
+- `CertSignPdf` has a "USB token" mode next to "Certificate file", with
+  one-time setup steps for users who haven't installed hey yet.
+
 ## [0.1.0] - 2026-11-02
 
 First public release.

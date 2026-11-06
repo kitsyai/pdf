@@ -20,6 +20,7 @@ import {
 import { useSinglePdf } from "../shared/useSinglePdf";
 import { describeCertificate, webCryptoSigner } from "./cms";
 import { signPdfWithCertificate } from "./padesCore";
+import { HeyDscError, findTokenCertificates, heyTokenSigner, type TokenCertificate } from "./heySigner";
 import { CertificatePasswordError, readPkcs12 } from "./pkcs12";
 import { verifyPdfSignatures } from "./verifyCore";
 
@@ -37,6 +38,41 @@ const POSITIONS = {
   "top-right": { x: 0.98 - BOX.width, y: 0.03, label: "Top right" },
   "top-left": { x: 0.02, y: 0.03, label: "Top left" },
 };
+
+const HEY_INSTALL = {
+  windows: "irm https://raw.githubusercontent.com/kitsyai/hey/main/install/hey.ps1 | iex",
+  unix: "curl -fsSL https://raw.githubusercontent.com/kitsyai/hey/main/install/hey.sh | sh",
+};
+
+function TokenSetup() {
+  const code = "block overflow-x-auto rounded-lg bg-slate-900 px-3 py-2 font-mono text-[11px] text-slate-100";
+  return (
+    <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300">
+      <p className="font-semibold text-slate-900 dark:text-slate-100">Set up token signing (one time)</p>
+      <ol className="mt-2 list-decimal space-y-2 pl-4">
+        <li>
+          Install your token's driver (it comes from the token vendor, e.g. ePass2003 or ProxKey), then plug in the token.
+        </li>
+        <li>
+          Install <a className="underline" href="https://github.com/kitsyai/hey" target="_blank" rel="noreferrer">hey</a>, a small
+          open-source helper. In PowerShell (Windows):
+          <code className={`mt-1 ${code}`}>{HEY_INSTALL.windows}</code>
+          or in a terminal (macOS / Linux):
+          <code className={`mt-1 ${code}`}>{HEY_INSTALL.unix}</code>
+        </li>
+        <li>
+          Start the token signer:
+          <code className={`mt-1 ${code}`}>hey up dsc</code>
+        </li>
+        <li>Click "Find my token" again. If your browser asks to allow access to devices on your local network, allow it.</li>
+      </ol>
+      <p className="mt-2">
+        Your token's private key never leaves the token. Before every signature, your computer shows its own confirmation
+        dialog naming this site and the document.
+      </p>
+    </div>
+  );
+}
 
 const formatDate = (date: Date) =>
   date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
@@ -73,6 +109,10 @@ export default function CertSignPdf() {
   const [certPassword, setCertPassword] = useState("");
   const [signer, setSigner] = useState(null);
   const [certificate, setCertificate] = useState(null);
+  const [source, setSource] = useState<"file" | "token">("file");
+  const [tokens, setTokens] = useState<TokenCertificate[] | null>(null);
+  const [tokenCert, setTokenCert] = useState<TokenCertificate | null>(null);
+  const [needsSetup, setNeedsSetup] = useState(false);
   const [reason, setReason] = useState(REASONS[1]);
   const [customReason, setCustomReason] = useState("");
   const [location, setLocation] = useState("");
@@ -82,7 +122,7 @@ export default function CertSignPdf() {
   const [isWorking, setIsWorking] = useState(false);
   const [status, setStatus] = useState({
     tone: "info",
-    text: "Add a PDF and your certificate (.pfx or .p12) to sign it digitally.",
+    text: "Add a PDF, then your certificate file (.pfx / .p12) or your USB token.",
   });
 
   useEffect(() => {
@@ -101,6 +141,41 @@ export default function CertSignPdf() {
     setSigner(null);
     setCertificate(null);
     setCertPassword("");
+    setTokenCert(null);
+  };
+
+  const switchSource = (next: "file" | "token") => {
+    if (next === source) return;
+    forgetCertificate();
+    setSource(next);
+  };
+
+  const chooseToken = (token: TokenCertificate) => {
+    setTokenCert(token);
+    setCertificate(token.summary);
+    setSigner(heyTokenSigner(token));
+  };
+
+  const findTokens = async () => {
+    setIsWorking(true);
+    setNeedsSetup(false);
+    try {
+      const found = await findTokenCertificates();
+      setTokens(found);
+      if (found.length === 1) chooseToken(found[0]);
+      setStatus(
+        found.length
+          ? { tone: "success", text: `Found ${found.length} certificate${found.length === 1 ? "" : "s"} on your token.` }
+          : { tone: "error", text: "hey is running, but no certificate was found. Is the token plugged in and its driver installed?" }
+      );
+    } catch (error) {
+      const setup = error instanceof HeyDscError && ["no_hub", "not_set_up", "not_running"].includes(error.code);
+      setNeedsSetup(setup);
+      setTokens(null);
+      setStatus({ tone: "error", text: error?.message || "Could not reach the token." });
+    } finally {
+      setIsWorking(false);
+    }
   };
 
   const chooseCertificate = (file) => {
@@ -141,10 +216,18 @@ export default function CertSignPdf() {
     event.preventDefault();
     if (!canSign) return;
     setIsWorking(true);
-    setStatus({ tone: "info", text: "Signing your PDF..." });
+    setStatus({
+      tone: "info",
+      text:
+        source === "token"
+          ? "Confirm the signature in the dialog on your computer (it may ask for the token PIN)..."
+          : "Signing your PDF...",
+    });
     try {
       const spot = POSITIONS[position];
-      const signed = await signPdfWithCertificate(pdf.bytes, signer, {
+      // The token signer shows the document name in its confirmation dialog.
+      const activeSigner = source === "token" && tokenCert ? heyTokenSigner(tokenCert, { document: pdf.file.name }) : signer;
+      const signed = await signPdfWithCertificate(pdf.bytes, activeSigner, {
         reason: finalReason,
         location: location.trim(),
         visible: visible ? { pageIndex, x: spot.x, y: spot.y, ...BOX } : null,
@@ -173,7 +256,7 @@ export default function CertSignPdf() {
   return (
     <PdfToolPage
       title="Digital Signature (Certificate)"
-      description="Sign a PDF with your digital certificate (.pfx / .p12). Viewers such as Adobe Reader show who signed it and flag any later change. Your certificate and its private key never leave your browser."
+      description="Sign a PDF with your digital signature certificate (DSC): a .pfx / .p12 file or a USB token. Viewers such as Adobe Reader show who signed it and flag any later change. Private keys never leave your browser or your token."
       stats={[
         { value: "PAdES", label: "Standard" },
         { value: certificate ? "Ready" : "-", label: "Certificate" },
@@ -200,7 +283,32 @@ export default function CertSignPdf() {
             ) : null}
 
             <section className={`mt-5 ${cardClass}`}>
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">1. Your certificate</h3>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">1. Your certificate</h3>
+                <div role="radiogroup" aria-label="Certificate source" className="inline-flex rounded-xl border border-slate-200 p-0.5 text-xs dark:border-slate-700">
+                  {[
+                    ["file", "fa-file-shield", "Certificate file"],
+                    ["token", "fa-usb", "USB token"],
+                  ].map(([value, icon, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      role="radio"
+                      aria-checked={source === value}
+                      disabled={busy}
+                      onClick={() => switchSource(value as "file" | "token")}
+                      className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium transition ${
+                        source === value
+                          ? "bg-[#1F8CFF] text-white"
+                          : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                      }`}
+                    >
+                      <i className={`fa-${value === "token" ? "brands" : "solid"} ${icon}`} />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <input
                 ref={certInputRef}
                 type="file"
@@ -219,6 +327,7 @@ export default function CertSignPdf() {
                       { label: "Organisation", value: certificate.organization || "-" },
                       { label: "Issued by", value: certificate.issuerCommonName || certificate.issuerOrganization || "-" },
                       { label: "Valid", value: `${formatDate(certificate.notBefore)} – ${formatDate(certificate.notAfter)}` },
+                      ...(source === "token" && tokenCert ? [{ label: "Key stored on", value: tokenCert.label }] : []),
                     ]}
                   />
                   {expired ? (
@@ -232,6 +341,34 @@ export default function CertSignPdf() {
                     <i className="fa-solid fa-rotate" />
                     Use a different certificate
                   </button>
+                </div>
+              ) : source === "token" ? (
+                <div className="mt-3">
+                  {tokens && tokens.length > 1 ? (
+                    <fieldset className="mb-3 grid gap-2">
+                      <legend className={fieldLabelClass}>Choose a certificate</legend>
+                      {tokens.map((token) => (
+                        <label
+                          key={token.id}
+                          className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700"
+                        >
+                          <input type="radio" name="token-certificate" className="mt-1" onChange={() => chooseToken(token)} disabled={busy} />
+                          <span>
+                            <span className="font-medium text-slate-900 dark:text-slate-100">{token.summary.commonName || "(no name)"}</span>
+                            <span className="block text-xs text-slate-500 dark:text-slate-400">
+                              {token.summary.issuerCommonName || token.summary.issuerOrganization || "Unknown issuer"} · valid until{" "}
+                              {formatDate(token.summary.notAfter)} · {token.label}
+                            </span>
+                          </span>
+                        </label>
+                      ))}
+                    </fieldset>
+                  ) : null}
+                  <button type="button" onClick={findTokens} disabled={busy} className={primaryButtonClass}>
+                    <i className={`fa-solid ${isWorking ? "fa-spinner fa-spin" : "fa-magnifying-glass"}`} />
+                    Find my token
+                  </button>
+                  {needsSetup ? <TokenSetup /> : null}
                 </div>
               ) : (
                 <div className="mt-3 grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-end">
@@ -343,7 +480,7 @@ export default function CertSignPdf() {
                 "This is a cryptographic signature (PAdES), not just an image. Any later change to the file is detected.",
                 "Whether viewers show it as trusted depends on who issued your certificate, not on this tool.",
                 "Your .pfx file, its password, and its private key stay in this browser tab and are never uploaded.",
-                "USB token DSCs (ePass, ProxKey, etc.) need a small local helper; that support is coming.",
+                "USB tokens (ePass2003, ProxKey, Watchdata, mToken and others) sign through hey, a small open-source helper on your computer. The key stays on the token.",
                 "Check any signed PDF with Verify Signatures.",
               ]}
             />

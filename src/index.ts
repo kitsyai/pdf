@@ -86,3 +86,11 @@ export {
   type VisibleSignature,
 } from "./certsign/padesCore";
 export { parsePdfDate, verifyPdfSignatures, type SignatureCheck } from "./certsign/verifyCore";
+export {
+  HEY_HUB_URL,
+  HeyDscError,
+  findTokenCertificates,
+  heyTokenSigner,
+  type HeyDscErrorCode,
+  type TokenCertificate,
+} from "./certsign/heySigner";

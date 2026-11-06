@@ -132,6 +132,33 @@ Details:
   signing, and the certificate details. It does **not** check whether the
   certificate is trusted or revoked.
 
+### Digital signatures with a USB token
+
+USB-token DSCs (ePass2003, ProxKey, Watchdata, mToken, SafeNet and other
+PKCS#11 tokens) sign through [hey](https://github.com/kitsyai/hey) and its
+[dsc](https://github.com/kitsyai/dsc) service on the user's computer. The user
+runs `hey up dsc` once; the private key never leaves the token, and `dsc` shows
+a native confirmation dialog before every signature.
+
+```js
+import { findTokenCertificates, heyTokenSigner, signPdfWithCertificate, HeyDscError } from "@kitsy/pdf";
+
+try {
+  const [token] = await findTokenCertificates(); // [{ id, certificate, label, summary }]
+  const signer = heyTokenSigner(token, { document: "contract.pdf" }); // name shown in the dialog
+  const signed = await signPdfWithCertificate(pdfBytes, signer, { reason: "I approve this document" });
+} catch (error) {
+  if (error instanceof HeyDscError) {
+    // error.code: "no_hub" | "not_set_up" | "not_running" | "declined" | "pin_incorrect" | "pin_locked" | ...
+  }
+}
+```
+
+Your site's origin must be on the hey hub's allow-list, which you set in hey's
+`dsc` pack. If your site sends a Content-Security-Policy, add
+`http://127.0.0.1:8525` to `connect-src`. `CertSignPdf` (React) includes a
+"USB token" mode with the setup steps for users.
+
 ## React usage
 
 Each component is a full page. Load them lazily through the per-tool subpaths:

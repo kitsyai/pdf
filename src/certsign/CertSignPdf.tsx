@@ -64,7 +64,10 @@ function TokenSetup() {
           Start the token signer:
           <code className={`mt-1 ${code}`}>hey up dsc</code>
         </li>
-        <li>Click "Find my token" again. If your browser asks to allow access to devices on your local network, allow it.</li>
+        <li>
+          Click "Find my token" again. Your browser may ask whether this site can access devices on your local network:
+          allow it, so the page can reach hey on this computer.
+        </li>
       </ol>
       <p className="mt-2">
         Your token's private key never leaves the token. Before every signature, your computer shows its own confirmation

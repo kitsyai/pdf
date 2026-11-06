@@ -29,7 +29,8 @@ export type HeyDscErrorCode =
   | "failed";
 
 const MESSAGES: Record<HeyDscErrorCode, string> = {
-  no_hub: "Couldn't reach hey on this computer. Start it with: hey up dsc",
+  no_hub:
+    "Couldn't reach hey on this computer. Make sure it's running (hey up dsc), and if your browser asked about access to your local network, allow it.",
   not_set_up: "The token signer isn't set up yet. Run: hey up dsc",
   not_running: "The token signer is stopped. Run: hey up dsc",
   declined: "The signature was cancelled.",

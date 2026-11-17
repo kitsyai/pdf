@@ -235,7 +235,7 @@ export default function CertSignPdf() {
       let ltv: ValidationData | null = null;
       let ltvNote = "";
       if (source === "token" && tokenCert) {
-        setStatus({ tone: "info", text: "Checking your certificate's revocation status with its issuer..." });
+        setStatus({ tone: "info", text: "Checking your certificate's revocation status with its issuer. This can take up to a minute or two..." });
         try {
           const data = await fetchValidationData(tokenCert.certificate);
           if (data.ocsps.length || data.crls.length) ltv = data;

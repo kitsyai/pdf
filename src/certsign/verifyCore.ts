@@ -1,7 +1,7 @@
 // Inspect and verify the digital signatures in a PDF.
 import * as asn1js from "asn1js";
 import * as pkijs from "pkijs";
-import { PDFArray, PDFDict, PDFDocument, PDFHexString, PDFName, PDFNumber, PDFString } from "pdf-lib";
+import { PDFArray, PDFDict, PDFDocument, PDFHexString, PDFName, PDFNumber, PDFObject, PDFRef, PDFStream, PDFString } from "pdf-lib";
 import { signatureFields } from "../shared/signatureFields";
 import { OID, describeCertificate, type CertificateSummary } from "./cms";
 
@@ -14,6 +14,14 @@ export type SignatureCheck = {
   intact: boolean | null;
   /** The signature covers the whole file (nothing appended after signing). */
   coversWholeFile: boolean;
+  /**
+   * When the signature doesn't cover the whole file: everything added after
+   * signing is long-term validation data only (a PAdES DSS), which doesn't
+   * change the document.
+   */
+  laterChangesAreValidationData: boolean;
+  /** The file carries a DSS with long-term validation data. */
+  hasValidationData: boolean;
   signer: CertificateSummary | null;
   /** Certificate validity period includes the claimed signing time. */
   certificateValidAtSigning: boolean | null;
@@ -88,12 +96,77 @@ function attributeValue(signerInfo: pkijs.SignerInfo, oid: string) {
   return signerInfo.signedAttrs?.attributes.find((attribute) => attribute.type === oid)?.values[0];
 }
 
-async function checkSignature(file: Uint8Array, name: string, dict: PDFDict): Promise<SignatureCheck> {
+/** Every indirect reference reachable from value (followed through context). */
+function reachable(context: PDFDocument["context"], value: PDFObject | undefined, seen = new Set<string>()) {
+  const walk = (v: PDFObject | undefined) => {
+    if (!v) return;
+    if (v instanceof PDFRef) {
+      const key = v.toString();
+      if (seen.has(key)) return;
+      seen.add(key);
+      walk(context.lookup(v));
+    } else if (v instanceof PDFArray) {
+      v.asArray().forEach(walk);
+    } else if (v instanceof PDFDict) {
+      for (const [, item] of v.entries()) walk(item);
+    } else if (v instanceof PDFStream) {
+      for (const [, item] of v.dict.entries()) walk(item);
+    }
+  };
+  walk(value);
+  return seen;
+}
+
+function sameDictExcept(a: PDFObject | undefined, b: PDFObject | undefined, ignore: string[]) {
+  if (!(a instanceof PDFDict) || !(b instanceof PDFDict)) return false;
+  const entries = (d: PDFDict) =>
+    d
+      .entries()
+      .filter(([key]) => !ignore.includes(key.decodeText()))
+      .map(([key, value]) => `${key.toString()} ${value.toString()}`)
+      .sort()
+      .join("\n");
+  return entries(a) === entries(b);
+}
+
+/**
+ * True when the revisions after signedEnd only add long-term validation
+ * data: the catalog may gain /DSS and /Extensions, and every new object must
+ * be reachable from the DSS. Any other change (content, pages, annotations,
+ * form values, another signature) returns false.
+ */
+async function onlyValidationDataAfter(file: Uint8Array, signedEnd: number, later: PDFDocument) {
+  let earlier: PDFDocument;
+  try {
+    earlier = await PDFDocument.load(file.subarray(0, signedEnd), { ignoreEncryption: true, updateMetadata: false });
+  } catch {
+    return false;
+  }
+  const root = later.context.trailerInfo.Root;
+  if (!(root instanceof PDFRef) || root !== earlier.context.trailerInfo.Root) return false;
+  const dss = later.catalog.get(N("DSS"));
+  if (!dss) return false;
+  const fromDss = reachable(later.context, dss);
+  for (const [ref, object] of later.context.enumerateIndirectObjects()) {
+    const before = earlier.context.lookup(ref);
+    if (before !== undefined) {
+      if (before.toString() === object.toString()) continue;
+      if (ref === root && sameDictExcept(before, object, ["DSS", "Extensions"])) continue;
+      return false;
+    }
+    if (!fromDss.has(ref.toString())) return false;
+  }
+  return true;
+}
+
+async function checkSignature(file: Uint8Array, name: string, dict: PDFDict, doc: PDFDocument): Promise<SignatureCheck> {
   const check: SignatureCheck = {
     fieldName: name,
     subFilter: (dict.lookup(N("SubFilter")) as PDFName | undefined)?.decodeText?.() ?? "",
     intact: null,
     coversWholeFile: false,
+    laterChangesAreValidationData: false,
+    hasValidationData: false,
     signer: null,
     certificateValidAtSigning: null,
     signingTime: parsePdfDate(text(dict.lookup(N("M")))),
@@ -123,6 +196,10 @@ async function checkSignature(file: Uint8Array, name: string, dict: PDFDict): Pr
     // in it (a signature-wrapping attack) would be unsigned content.
     file.subarray(firstLength + 1, secondStart - 1).every(isHexOrSpace);
   check.coversWholeFile = structureOk && secondStart + secondLength === file.length;
+  check.hasValidationData = doc.catalog.get(N("DSS")) !== undefined;
+  if (structureOk && !check.coversWholeFile) {
+    check.laterChangesAreValidationData = await onlyValidationDataAfter(file, secondStart + secondLength, doc);
+  }
   if (!structureOk) {
     check.intact = false;
     check.problem = "The signed byte range does not match the file.";
@@ -207,7 +284,7 @@ export async function verifyPdfSignatures(bytes: ArrayBuffer | Uint8Array) {
 
   const checks: SignatureCheck[] = [];
   for (const field of signatureFields(doc)) {
-    if (field.value) checks.push(await checkSignature(file, field.name, field.value));
+    if (field.value) checks.push(await checkSignature(file, field.name, field.value, doc));
   }
   return checks;
 }

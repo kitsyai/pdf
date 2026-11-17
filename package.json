@@ -1,6 +1,6 @@
 {
   "name": "@kitsy/pdf",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Private, in-browser PDF tools: merge, split, organize, compress, watermark, fill forms, protect, sign (including PAdES digital signatures with .pfx certificates) and verify. Framework-free core plus optional React UIs.",
   "license": "Apache-2.0",
   "author": "HEYPKV INNOVATIONS PRIVATE LIMITED (https://kitsy.ai)",

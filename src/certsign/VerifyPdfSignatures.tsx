@@ -18,8 +18,15 @@ const formatDay = (date: Date) =>
   date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 
 function verdict(check: SignatureCheck) {
-  if (check.intact && check.coversWholeFile) {
-    return { tone: "good", icon: "fa-circle-check", title: "Signature is valid", detail: "The document has not changed since it was signed." };
+  if (check.intact && (check.coversWholeFile || check.laterChangesAreValidationData)) {
+    return {
+      tone: "good",
+      icon: "fa-circle-check",
+      title: "Signature is valid",
+      detail: check.hasValidationData
+        ? "The document has not changed since it was signed. It includes long-term validation data (certificate chain and revocation status)."
+        : "The document has not changed since it was signed.",
+    };
   }
   if (check.intact) {
     return {
@@ -70,7 +77,7 @@ function SignatureCard({ check, index }: { check: SignatureCheck; index: number 
           { label: "Format", value: check.subFilter || "-" },
         ]}
       />
-      {!check.coversWholeFile ? (
+      {!check.coversWholeFile && !check.laterChangesAreValidationData ? (
         <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
           Signed on, reason, and location are read from the file's latest version, which was changed after signing, so
           they may not be what the signer wrote.
@@ -125,7 +132,7 @@ export default function VerifyPdfSignatures() {
       const result = await verifyPdfSignatures(await next.arrayBuffer());
       if (request !== requestRef.current) return;
       setChecks(result);
-      const valid = result.filter((check) => check.intact && check.coversWholeFile).length;
+      const valid = result.filter((check) => check.intact && (check.coversWholeFile || check.laterChangesAreValidationData)).length;
       setStatus(
         result.length
           ? {
@@ -149,7 +156,7 @@ export default function VerifyPdfSignatures() {
       description="Check the digital signatures in a PDF: who signed it, when, and whether it has changed since. Runs in your browser; files never leave your device."
       stats={[
         { value: checks ? checks.length : "-", label: "Signatures" },
-        { value: checks ? checks.filter((check) => check.intact && check.coversWholeFile).length : "-", label: "Valid" },
+        { value: checks ? checks.filter((check) => check.intact && (check.coversWholeFile || check.laterChangesAreValidationData)).length : "-", label: "Valid" },
       ]}
     >
       <PdfToolColumns

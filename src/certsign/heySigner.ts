@@ -3,6 +3,7 @@
 // the private key: dsc asks the user in a native dialog, and the token signs.
 import type { RawSigner } from "./cms";
 import { describeCertificate, type CertificateSummary } from "./cms";
+import type { ValidationData } from "./dss";
 
 export const HEY_HUB_URL = "http://127.0.0.1:8525";
 const CLIENT = "kitsy-pdf";
@@ -26,6 +27,7 @@ export type HeyDscErrorCode =
   | "pin_locked"
   | "unsupported_key"
   | "no_dialog"
+  | "revoked"
   | "failed";
 
 const MESSAGES: Record<HeyDscErrorCode, string> = {
@@ -39,6 +41,7 @@ const MESSAGES: Record<HeyDscErrorCode, string> = {
   pin_locked: "The token PIN is locked. Unlock it with the token's own software.",
   unsupported_key: "Only RSA certificates are supported.",
   no_dialog: "The signer couldn't show its confirmation dialog on this computer.",
+  revoked: "This certificate has been revoked by its issuer, so signatures made with it are not valid.",
   failed: "The token couldn't sign.",
 };
 
@@ -136,5 +139,35 @@ export function heyTokenSigner(token: TokenCertificate, { document = "", ...opti
       if (!body?.signature) throw new HeyDscError("failed");
       return base64ToBytes(body.signature);
     },
+  };
+}
+
+/**
+ * Long-term validation data for certificate (DER), fetched by dsc from the
+ * addresses inside the certificate: its chain up to the root, and OCSP
+ * responses or CRLs showing it wasn't revoked. Pass it as `ltv` to
+ * signPdfWithCertificate so Adobe Reader can validate the signature offline.
+ * `problems` lists anything that couldn't be fetched; a revoked certificate
+ * throws HeyDscError("revoked").
+ */
+export async function fetchValidationData(
+  certificate: Uint8Array,
+  options: Options = {}
+): Promise<ValidationData & { problems: string[] }> {
+  const body = await call(
+    "/validation",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ certificate: bytesToBase64(certificate) }),
+    },
+    options
+  );
+  const list = (value: unknown) => (Array.isArray(value) ? value.map((item) => base64ToBytes(String(item))) : []);
+  return {
+    chain: list(body?.chain),
+    ocsps: list(body?.ocsps),
+    crls: list(body?.crls),
+    problems: Array.isArray(body?.problems) ? body.problems.map(String) : [],
   };
 }

@@ -27,6 +27,7 @@ import { textOrigin, visualSize } from "../shared/pageGeometry";
 import { hasDigitalSignatures, signatureFields } from "../shared/signatureFields";
 import { placementToVisual } from "../sign/signPdfCore";
 import { buildCmsSignature, describeCertificate, sha256, type RawSigner } from "./cms";
+import { appendDss, type ValidationData } from "./dss";
 
 const N = (name: string) => PDFName.of(name);
 const PLACEHOLDER = 1234567890;
@@ -48,6 +49,13 @@ export type CertificateSignOptions = {
   /** Omit for an invisible signature. */
   visible?: VisibleSignature | null;
   signingTime?: Date;
+  /**
+   * Long-term validation data for the signing certificate (see
+   * fetchValidationData). The chain is embedded in the signature, and the
+   * chain plus OCSP responses/CRLs are appended as a PAdES DSS, so Adobe
+   * Reader can check revocation offline ("LTV enabled").
+   */
+  ltv?: ValidationData | null;
 };
 
 function pad(value: number) {
@@ -160,6 +168,11 @@ export async function signPdfWithCertificate(
 
   const certificate = describeCertificate(signer.certificate);
   const signingTime = options.signingTime ?? new Date();
+  if (options.ltv?.chain.length) {
+    const known = new Set((signer.chain || []).map((der) => der.join(",")));
+    const extra = options.ltv.chain.filter((der) => !known.has(der.join(",")));
+    signer = { ...signer, chain: [...(signer.chain || []), ...extra] };
+  }
   const certBytes = signer.certificate.length + (signer.chain || []).reduce((sum, der) => sum + der.length, 0);
   // Room for the certificates, signature, attributes, and a future timestamp.
   const reserved = certBytes + 8192;
@@ -250,5 +263,9 @@ export async function signPdfWithCertificate(
   const hex = Array.from(cms, (byte) => byte.toString(16).padStart(2, "0")).join("").toUpperCase();
   output.set(new TextEncoder().encode(hex), contentsStart + 1);
 
+  const ltv = options.ltv;
+  if (ltv && (ltv.ocsps.length || ltv.crls.length)) {
+    return appendDss(output, { certs: [signer.certificate, ...ltv.chain], ocsps: ltv.ocsps, crls: ltv.crls });
+  }
   return output;
 }

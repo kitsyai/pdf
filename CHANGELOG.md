@@ -5,7 +5,24 @@ All notable changes to this package are listed here. The format follows
 [Semantic Versioning](https://semver.org/). Before 1.0.0, minor versions may
 include breaking changes.
 
-## [0.2.1] - Unreleased
+## [0.2.2] - Unreleased
+
+### Added
+
+- Long-term validation (PAdES LTV) for USB-token signatures:
+  `fetchValidationData` gets the certificate's chain and OCSP responses or
+  CRLs through hey's `dsc` (0.1.4+), and `signPdfWithCertificate({ ltv })`
+  embeds the chain in the signature and appends a DSS as an incremental
+  update. Adobe Reader can then confirm the signature offline instead of
+  showing "validity unknown". `appendDss` is exported.
+- `verifyPdfSignatures` reports `hasValidationData` and
+  `laterChangesAreValidationData`: a revision that only adds a DSS (catalog
+  /DSS and /Extensions, objects reachable from the DSS) keeps the signature
+  "valid"; any other later change is still flagged.
+- `CertSignPdf` (USB token) fetches validation data before signing, stops on
+  a revoked certificate, and says when LTV data couldn't be added.
+
+## [0.2.1] - 2026-11-17
 
 ### Fixed
 

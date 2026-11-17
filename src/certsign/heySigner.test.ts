@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { testIdentity } from "../test-utils/certificates";
-import { HeyDscError, findTokenCertificates, heyTokenSigner } from "./heySigner";
+import { HeyDscError, fetchValidationData, findTokenCertificates, heyTokenSigner } from "./heySigner";
 
 const b64 = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64");
 
@@ -54,5 +54,20 @@ describe("hey token signer", () => {
       expect(error).toBeInstanceOf(HeyDscError);
       expect(error.code).toBe(code);
     }
+  });
+
+  it("fetches long-term validation data for a certificate", async () => {
+    const { leafDer, caDer } = testIdentity();
+    const { fn, calls } = fakeFetch(() => ({ status: 200, body: { chain: [b64(caDer)], ocsps: [b64(new Uint8Array([1]))], crls: [], problems: ["CRL for X: timeout"] } }));
+    const data = await fetchValidationData(leafDer, { fetch: fn });
+    expect(calls[0].url).toBe("http://127.0.0.1:8525/svc/dsc/validation");
+    expect(JSON.parse(calls[0].init.body as string)).toEqual({ certificate: b64(leafDer) });
+    expect(data.chain).toHaveLength(1);
+    expect(Array.from(data.ocsps[0])).toEqual([1]);
+    expect(data.problems).toEqual(["CRL for X: timeout"]);
+
+    const revoked = fakeFetch(() => ({ status: 409, body: { error: "revoked", message: "certificate is revoked: X" } }));
+    const error = await fetchValidationData(leafDer, { fetch: revoked.fn }).catch((e) => e);
+    expect(error.code).toBe("revoked");
   });
 });

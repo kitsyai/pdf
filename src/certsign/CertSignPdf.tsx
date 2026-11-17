@@ -20,7 +20,8 @@ import {
 import { useSinglePdf } from "../shared/useSinglePdf";
 import { describeCertificate, webCryptoSigner } from "./cms";
 import { signPdfWithCertificate } from "./padesCore";
-import { HeyDscError, findTokenCertificates, heyTokenSigner, type TokenCertificate } from "./heySigner";
+import { HeyDscError, fetchValidationData, findTokenCertificates, heyTokenSigner, type TokenCertificate } from "./heySigner";
+import type { ValidationData } from "./dss";
 import { CertificatePasswordError, readPkcs12 } from "./pkcs12";
 import { verifyPdfSignatures } from "./verifyCore";
 
@@ -228,23 +229,50 @@ export default function CertSignPdf() {
     });
     try {
       const spot = POSITIONS[position];
+      // Token signing goes through hey's dsc, which can also fetch the
+      // certificate's chain and revocation status (PAdES LTV), so Adobe
+      // Reader can validate the signature offline instead of "unknown".
+      let ltv: ValidationData | null = null;
+      let ltvNote = "";
+      if (source === "token" && tokenCert) {
+        setStatus({ tone: "info", text: "Checking your certificate's revocation status with its issuer..." });
+        try {
+          const data = await fetchValidationData(tokenCert.certificate);
+          if (data.ocsps.length || data.crls.length) ltv = data;
+          else ltvNote = data.problems[0] || "the certificate lists no revocation service";
+        } catch (error) {
+          if (error instanceof HeyDscError && error.code === "revoked") throw error;
+          ltvNote =
+            error instanceof HeyDscError && error.code === "not_set_up"
+              ? "update hey (hey self update, then hey up dsc)"
+              : error?.message || "the revocation check failed";
+        }
+        setStatus({ tone: "info", text: "Confirm the signature in the dialog on your computer (it may ask for the token PIN)..." });
+      }
       // The token signer shows the document name in its confirmation dialog.
       const activeSigner = source === "token" && tokenCert ? heyTokenSigner(tokenCert, { document: pdf.file.name }) : signer;
       const signed = await signPdfWithCertificate(pdf.bytes, activeSigner, {
+        ltv,
         reason: finalReason,
         location: location.trim(),
         visible: visible ? { pageIndex, x: spot.x, y: spot.y, ...BOX } : null,
       });
       // Check our own output before handing it over.
       const [check] = await verifyPdfSignatures(signed);
-      if (!check?.intact || !check.coversWholeFile) {
+      if (!check?.intact || !(check.coversWholeFile || check.laterChangesAreValidationData)) {
         throw new Error("The signed file did not pass verification. Nothing was downloaded.");
       }
       const blob = new Blob([signed as BlobPart], { type: "application/pdf" });
       downloadBlob(blob, `${toBaseName(pdf.file.name, "document")}-signed.pdf`);
       setStatus({
         tone: "success",
-        text: `Signed and verified (${formatBytes(blob.size)}). Your download has started.`,
+        text: `Signed and verified (${formatBytes(blob.size)}). Your download has started.${
+          ltv
+            ? " It includes long-term validation data, so Adobe Reader can confirm it offline."
+            : source === "token"
+              ? ` Long-term validation data wasn't added (${ltvNote}), so Adobe Reader may show its validity as unknown.`
+              : ""
+        }`,
       });
     } catch (error) {
       setStatus({ tone: "error", text: `Signing failed: ${error?.message || "Please try again."}` });

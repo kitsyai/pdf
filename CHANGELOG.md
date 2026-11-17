@@ -15,7 +15,7 @@ include breaking changes.
   are 135 bytes instead of several hundred. Those tokens fail with
   CKR_DEVICE_ERROR on inputs above about 128-255 bytes.
 
-## [0.2.0] - Unreleased
+## [0.2.0] - 2026-11-07
 
 ### Added
 

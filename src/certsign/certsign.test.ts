@@ -151,6 +151,9 @@ describe("buildCmsSignature", () => {
     embedded[0] = 0xa0;
     const hay = Array.from(cms).join(",");
     expect(hay.includes(Array.from(embedded).join(","))).toBe(true);
+    // USB tokens that hash on the card (ePass2003) fail above ~128-255
+    // bytes; the attributes must stay small whatever the issuer's name.
+    expect(seen.length).toBeLessThanOrEqual(140);
   });
 });
 

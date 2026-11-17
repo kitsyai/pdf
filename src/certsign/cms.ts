@@ -50,20 +50,17 @@ export function parseCertificate(der: Uint8Array) {
   }
 }
 
-/** ESS signing-certificate-v2: binds the signature to this exact certificate. */
-async function signingCertificateV2(der: Uint8Array, cert: pkijs.Certificate) {
-  const issuerSerial = new asn1js.Sequence({
-    value: [
-      new asn1js.Sequence({
-        value: [new asn1js.Constructed({ idBlock: { tagClass: 3, tagNumber: 4 }, value: [cert.issuer.toSchema()] })],
-      }),
-      cert.serialNumber,
-    ],
-  });
+/**
+ * ESS signing-certificate-v2: binds the signature to this exact certificate
+ * by its SHA-256 hash. issuerSerial is left out, as ETSI EN 319 122-1
+ * (CAdES baseline) recommends: the hash already identifies the certificate,
+ * and the issuer's full name would make the signed attributes several
+ * hundred bytes. USB tokens that hash on the card (e.g. ePass2003) only
+ * accept short inputs; without issuerSerial the attributes are ~135 bytes.
+ */
+async function signingCertificateV2(der: Uint8Array) {
   // hashAlgorithm defaults to SHA-256 in ESSCertIDv2, so it is omitted.
-  const essCertId = new asn1js.Sequence({
-    value: [new asn1js.OctetString({ valueHex: buffer(await sha256(der)) }), issuerSerial],
-  });
+  const essCertId = new asn1js.Sequence({ value: [new asn1js.OctetString({ valueHex: buffer(await sha256(der)) })] });
   return new asn1js.Sequence({ value: [new asn1js.Sequence({ value: [essCertId] })] });
 }
 
@@ -83,7 +80,7 @@ export async function buildCmsSignature(documentDigest: Uint8Array, signer: RawS
     }),
     new pkijs.Attribute({
       type: OID.signingCertificateV2,
-      values: [await signingCertificateV2(signer.certificate, cert)],
+      values: [await signingCertificateV2(signer.certificate)],
     }),
   ]
     .map((attribute) => ({ attribute, der: new Uint8Array(attribute.toSchema().toBER()) }))

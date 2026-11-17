@@ -5,6 +5,16 @@ All notable changes to this package are listed here. The format follows
 [Semantic Versioning](https://semver.org/). Before 1.0.0, minor versions may
 include breaking changes.
 
+## [0.2.1] - Unreleased
+
+### Fixed
+
+- USB-token signing with tokens that hash on the card, such as the
+  ePass2003: the signing-certificate-v2 attribute no longer includes
+  issuerSerial (as ETSI EN 319 122-1 recommends), so the signed attributes
+  are 135 bytes instead of several hundred. Those tokens fail with
+  CKR_DEVICE_ERROR on inputs above about 128-255 bytes.
+
 ## [0.2.0] - Unreleased
 
 ### Added
